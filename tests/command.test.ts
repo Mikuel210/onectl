@@ -111,6 +111,55 @@ test("nested help lists its subcommands", async () => {
   }
 });
 
+test("hidden commands are omitted from root and nested help but remain callable", async () => {
+  const cli = createCommandFramework("tool");
+  let calls = 0;
+  cli.registerCommand({ route: [], description: "Root", args: [], flags: [], run: cli.root });
+  cli.registerCommand({ route: ["item"], description: "Items", args: [], flags: [], run: cli.root });
+  cli.registerCommand({ route: ["item", "show"], description: "Show", args: [], flags: [], run: cli.root });
+  cli.registerCommand({
+    route: ["item", "tick"],
+    description: "Internal",
+    args: [],
+    flags: [],
+    hidden: true,
+    run: async () => {
+      calls++;
+      return 7;
+    },
+  });
+  cli.registerCommand({
+    route: ["internal"],
+    description: "Internal",
+    args: [],
+    flags: [],
+    hidden: true,
+    run: async () => {
+      calls++;
+      return 8;
+    },
+  });
+
+  const log = spyOn(console, "log").mockImplementation(() => {});
+  try {
+    expect(await cli.handle(["--help"])).toBe(0);
+    expect(log.mock.calls.map((call) => call[0]).join("\n")).not.toContain("internal");
+    log.mockClear();
+    expect(await cli.handle(["item", "--help"])).toBe(0);
+    const nestedHelp = log.mock.calls.map((call) => call[0]).join("\n");
+    expect(nestedHelp).toContain("tool item show");
+    expect(nestedHelp).not.toContain("tool item tick");
+    log.mockClear();
+    expect(await cli.handle(["item", "tick", "--help"])).toBe(0);
+    expect(log.mock.calls.map((call) => call[0]).join("\n")).toContain("Internal");
+    expect(await cli.handle(["item", "tick"])).toBe(7);
+    expect(await cli.handle(["internal"])).toBe(8);
+    expect(calls).toBe(2);
+  } finally {
+    log.mockRestore();
+  }
+});
+
 test("help and unknown commands use the configured program name", async () => {
   const cli = createCommandFramework("tool");
   cli.registerCommand({ route: [], description: "Root", args: [], flags: [], run: async () => 0 });

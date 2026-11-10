@@ -21,8 +21,15 @@ export interface Command {
   description: string;
   args: Argument[];
   flags: Flag[];
+  hidden?: boolean;
   run: (args: Argument[], flags: Flag[]) => Promise<number>;
 }
 
+export {
+  validatePositiveInteger,
+  validateString,
+  validateSwitch,
+  validateTimeSpanMs,
+} from "./validate";
+
 export { createCommandFramework } from "./handler";
-export { validatePositiveInteger, validateString, validateSwitch, validateTimeSpanMs } from "./validate";

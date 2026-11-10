@@ -7,8 +7,12 @@ import { validatePositiveInteger } from "./validate";
 export const DARK_TEAL = "#80CBC4";
 const EXTRA_SPACES = 3;
 
-export function logObject(object: Record<string, any>, indented: boolean = false): void {
-  const spaces = Math.max(...Object.keys(object).map((e) => e.length)) + EXTRA_SPACES;
+export function logObject(
+  object: Record<string, any>,
+  indented: boolean = false,
+): void {
+  const spaces =
+    Math.max(...Object.keys(object).map((e) => e.length)) + EXTRA_SPACES;
 
   for (let key of Object.keys(object)) {
     let value = object[key]!;
@@ -20,7 +24,12 @@ export function logObject(object: Record<string, any>, indented: boolean = false
 }
 
 // Prompt options
-export function fuzzySearch<T>(entries: T[], keys: string[], query: string, limit: number): T[] {
+export function fuzzySearch<T>(
+  entries: T[],
+  keys: string[],
+  query: string,
+  limit: number,
+): T[] {
   const fuse = new Fuse(entries, {
     keys,
     threshold: 0.4,
@@ -181,6 +190,7 @@ export function createSpinner(message: string, index: number): Spinner {
 
 // Make sure cursor is shown on exit
 process.on("exit", showCursor);
+
 process.on("SIGINT", () => {
   showCursor();
   process.exit(130);

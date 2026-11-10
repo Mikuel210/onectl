@@ -43,8 +43,10 @@ export function createHelp(
       console.log(
         `\n${isRoot(command) ? "Available commands:" : "Subcommands:"}`,
       );
+
       const getRoute = (command: Command) =>
         `${programName} ${command.route.join(" ")}`;
+
       logObject(
         Object.fromEntries(
           subcommands.map((e) => [getRoute(e), e.description]),
@@ -64,6 +66,7 @@ export function createHelp(
   function getSubcommands(command: Command): Command[] {
     return commands.filter(
       (e) =>
+        !e.hidden &&
         e.route.length > command.route.length &&
         JSON.stringify(e.route.slice(0, command.route.length)) ==
           JSON.stringify(command.route),

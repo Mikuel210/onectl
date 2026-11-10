@@ -1,6 +1,6 @@
 # onectl
 
-Common utilities for Bun CLIs.
+Common utilities for Bun CLIs
 
 ## Features
 

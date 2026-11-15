@@ -26,6 +26,7 @@ export interface Command {
 }
 
 export {
+  validateDays,
   validatePositiveInteger,
   validateString,
   validateSwitch,

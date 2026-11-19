@@ -41,10 +41,8 @@ test("synthetic root shows aligned categories with executable descendant routes 
       "usage: tool [-h | --help] <command> [<args>]",
       "description: tool",
       "",
-      "Flags:",
-      "  -h, --help   Show help",
+      "Below is a list of all available commands",
       "",
-      "Available commands:",
       "  tool status      Show status",
       "",
       "Manage items:",
@@ -99,7 +97,7 @@ test("nonexecutable groups show short usage and list flat executable descendants
   }
 });
 
-test("root help includes declared flags and leaf help renders params and value names", async () => {
+test("root flags appear only in usage and leaf help renders params and value names", async () => {
   const cli = createCommandFramework("tool");
   cli.registerCommand({
     route: [],
@@ -113,6 +111,15 @@ test("root help includes declared flags and leaf help renders params and value n
       validate: validateSwitch,
     }],
     executable: false,
+    run,
+  });
+  cli.registerCommand({
+    route: ["hidden"],
+    category: "Internal commands",
+    description: "A hidden command",
+    args: [],
+    flags: [],
+    hidden: true,
     run,
   });
   cli.registerCommand({
@@ -142,12 +149,11 @@ test("root help includes declared flags and leaf help renders params and value n
   try {
     expect(await cli.handle(["--version"])).toBe(7);
     expect(await cli.handle(["-h"])).toBe(0);
-    expect(log.mock.calls.map(([message]) => message).slice(0, 5)).toEqual([
+    expect(log.mock.calls.map(([message]) => message)).toEqual([
       "usage: tool [-v | --version] [-h | --help] <command> [<args>]",
       "description: Test tool",
-      "\nFlags:",
-      "  -v, --version   Show version",
-      "  -h, --help      Show help",
+      "\nAvailable commands:",
+      "  tool item edit   Edit an item",
     ]);
     log.mockClear();
     expect(await cli.handle(["item", "edit", "--help"])).toBe(0);

@@ -1,8 +1,8 @@
 import type { Command, Flag } from "./command";
 import { logRows } from "./formatter";
 
-const helpFlag = { shortName: "h", longName: "help", description: "Show help", switch: true };
-type HelpFlag = Pick<Flag, "shortName" | "longName" | "description" | "switch" | "params" | "valueName">;
+const helpFlag = { shortName: "h", longName: "help", switch: true };
+type HelpFlag = Pick<Flag, "shortName" | "longName" | "switch" | "params" | "valueName">;
 type HelpRow = [string, string];
 
 export function createHelp(programName: string, commands: Command[], isRoot: (command: Command) => boolean) {
@@ -17,10 +17,9 @@ export function createHelp(programName: string, commands: Command[], isRoot: (co
       logRows(command.args.map(({ name, description }) => [name, description]), true);
     }
 
-    const flags = getHelpFlags(command);
-    if (flags.length > 0) {
+    if (!isRoot(command) && command.flags.length > 0) {
       console.log("\nFlags:");
-      logRows(flags.map((flag) => [getFlagNames(flag, ", "), flag.description]), true);
+      logRows(command.flags.map((flag) => [getFlagNames(flag, ", "), flag.description]), true);
     }
 
     const subcommands = commands.filter((child) =>
@@ -35,7 +34,6 @@ export function createHelp(programName: string, commands: Command[], isRoot: (co
       return;
     }
 
-    console.log("\nAvailable commands:");
     const groups = new Map<string, HelpRow[]>();
     let keyWidth = 0;
     for (const child of subcommands) {
@@ -48,7 +46,14 @@ export function createHelp(programName: string, commands: Command[], isRoot: (co
     }
 
     const ungrouped = groups.get("");
-    if (ungrouped) logRows(ungrouped, true, keyWidth);
+    const hasCategories = groups.size > (ungrouped ? 1 : 0);
+    console.log(hasCategories ? "\nBelow is a list of all available commands" : "\nAvailable commands:");
+
+    if (ungrouped) {
+      if (hasCategories) console.log();
+
+      logRows(ungrouped, true, keyWidth);
+    }
 
     for (const [category, rows] of groups) {
       if (!category) continue;

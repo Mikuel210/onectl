@@ -3,6 +3,7 @@ import type { Result } from "./task";
 export interface Argument {
   name: string;
   description: string;
+  params?: boolean;
   validate: (input: string) => Promise<Result<any>>;
   value?: any;
 }
@@ -12,18 +13,29 @@ export interface Flag {
   shortName?: string;
   description: string;
   switch: boolean;
+  params?: boolean;
+  valueName?: string;
   validate: (input: string) => Promise<Result<any>>;
   value?: any;
 }
 
-export interface Command {
+interface CommandDefinition {
   route: string[];
   description: string;
   args: Argument[];
   flags: Flag[];
   hidden?: boolean;
-  run: (args: Argument[], flags: Flag[]) => Promise<number>;
+  category?: string;
 }
+
+type CommandRunner = (args: Argument[], flags: Flag[]) => Promise<number>;
+
+export type Command =
+  & CommandDefinition
+  & (
+    | { executable?: boolean; run: CommandRunner }
+    | { executable: false; run?: never }
+  );
 
 export {
   validateDays,

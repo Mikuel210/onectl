@@ -1,77 +1,94 @@
 import type { Command, Flag } from "./command";
-import { logObject } from "./formatter";
+import { logRows } from "./formatter";
 
-export function createHelp(
-  programName: string,
-  commands: Command[],
-  isRoot: (command: Command) => boolean,
-) {
+const helpFlag = { shortName: "h", longName: "help", description: "Show help", switch: true };
+type HelpFlag = Pick<Flag, "shortName" | "longName" | "description" | "switch" | "params" | "valueName">;
+type HelpRow = [string, string];
+
+export function createHelp(programName: string, commands: Command[], isRoot: (command: Command) => boolean) {
+  const getRoute = (command: Command) => [programName, ...command.route].join(" ");
+
   function showHelp(command: Command): void {
-    console.log(`usage: ${getUsage(command)}`);
+    console.log(`usage: ${getUsage(command, true)}`);
     console.log(`description: ${command.description}`);
 
     if (command.args.length > 0) {
       console.log("\nArguments:");
-      logObject(
-        Object.fromEntries(command.args.map((e) => [e.name, e.description])),
-        true,
-      );
+      logRows(command.args.map(({ name, description }) => [name, description]), true);
     }
 
-    if (command.flags.length > 0) {
+    const flags = getHelpFlags(command);
+    if (flags.length > 0) {
       console.log("\nFlags:");
-
-      const getName = (flag: Flag) => {
-        let name = `--${flag.longName}`;
-
-        if (flag.shortName) name = `-${flag.shortName}, ${name}`;
-
-        return name;
-      };
-
-      logObject(
-        Object.fromEntries(
-          command.flags.map((e) => [getName(e), e.description]),
-        ),
-        true,
-      );
+      logRows(flags.map((flag) => [getFlagNames(flag, ", "), flag.description]), true);
     }
 
-    const subcommands = getSubcommands(command);
-
-    if (subcommands.length > 0) {
-      console.log(
-        `\n${isRoot(command) ? "Available commands:" : "Subcommands:"}`,
-      );
-
-      const getRoute = (command: Command) =>
-        `${programName} ${command.route.join(" ")}`;
-
-      logObject(
-        Object.fromEntries(
-          subcommands.map((e) => [getRoute(e), e.description]),
-        ),
-        true,
-      );
-    }
-  }
-
-  function getUsage(command: Command): string {
-    if (isRoot(command)) return `${programName} <command> [<args>]`;
-
-    let args = command.args.map((e) => `<${e.name}>`).join(" ");
-    return `${programName} ${args}`;
-  }
-
-  function getSubcommands(command: Command): Command[] {
-    return commands.filter(
-      (e) =>
-        !e.hidden &&
-        e.route.length > command.route.length &&
-        JSON.stringify(e.route.slice(0, command.route.length)) ==
-          JSON.stringify(command.route),
+    const subcommands = commands.filter((child) =>
+      !child.hidden && child.executable !== false && child.route.length > command.route.length
+      && command.route.every((part, index) => part === child.route[index])
     );
+    if (subcommands.length === 0) return;
+
+    if (!isRoot(command)) {
+      console.log("\nSubcommands:");
+      logRows(subcommands.map((child) => [getRoute(child), child.description]), true);
+      return;
+    }
+
+    console.log("\nAvailable commands:");
+    const groups = new Map<string, HelpRow[]>();
+    let keyWidth = 0;
+    for (const child of subcommands) {
+      const category = child.category?.trim() ?? "";
+      const route = getRoute(child);
+      keyWidth = Math.max(keyWidth, route.length);
+      if (!groups.has(category)) groups.set(category, []);
+
+      groups.get(category)!.push([route, child.description]);
+    }
+
+    const ungrouped = groups.get("");
+    if (ungrouped) logRows(ungrouped, true, keyWidth);
+
+    for (const [category, rows] of groups) {
+      if (!category) continue;
+      console.log(`\n${category.endsWith(":") ? category : `${category}:`}`);
+      logRows(rows, true, keyWidth);
+    }
   }
 
-  return showHelp;
+  function showUsage(command: Command): void {
+    console.log(`usage: ${getUsage(command, false)}`);
+    console.log(`see: ${getRoute(command)} --help`);
+  }
+
+  function getUsage(command: Command, includeFlags: boolean): string {
+    const route = getRoute(command);
+    const flags = includeFlags ? getHelpFlags(command).map(getFlagUsage) : [];
+    if (isRoot(command)) return [route, ...flags, "<command> [<args>]"].join(" ");
+    if (command.executable === false) return `${route} <subcommand>`;
+
+    const args = command.args.map((argument) => `<${argument.name}>${argument.params ? "..." : ""}`);
+    return [route, ...args, ...flags].join(" ");
+  }
+
+  function getHelpFlags(command: Command): HelpFlag[] {
+    if (!isRoot(command)) return command.flags;
+    return [...command.flags, helpFlag];
+  }
+
+  return { showHelp, showUsage };
+}
+
+function getFlagNames(flag: HelpFlag, separator: string): string {
+  const longName = `--${flag.longName}`;
+  return flag.shortName ? `-${flag.shortName}${separator}${longName}` : longName;
+}
+
+function getFlagUsage(flag: HelpFlag): string {
+  const names = getFlagNames(flag, " | ");
+  if (flag.switch) return `[${names}]`;
+
+  const value = `<${flag.valueName ?? flag.longName}>${flag.params ? "..." : ""}`;
+  return `[${flag.shortName ? `(${names})` : names} ${value}]`;
 }

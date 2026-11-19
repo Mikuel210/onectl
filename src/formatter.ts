@@ -11,13 +11,14 @@ export function logObject(
   object: Record<string, any>,
   indented: boolean = false,
 ): void {
-  const spaces =
-    Math.max(...Object.keys(object).map((e) => e.length)) + EXTRA_SPACES;
+  logRows(Object.entries(object), indented);
+}
 
-  for (let key of Object.keys(object)) {
-    let value = object[key]!;
-    const space = " ".repeat(spaces - key.length);
+export function logRows(rows: [string, unknown][], indented: boolean, keyWidth?: number): void {
+  const width = keyWidth ?? rows.reduce((max, [key]) => Math.max(max, key.length), 0);
 
+  for (const [key, value] of rows) {
+    const space = " ".repeat(width - key.length + EXTRA_SPACES);
     if (indented) console.log(`  ${key}${space}${value}`);
     else console.log(`${styleText(DARK_TEAL, key)}${space}${value}`);
   }
@@ -126,12 +127,17 @@ export async function promptOptions<T extends { name: string }>(
 
 // Task spinners
 let reservedLines = 0;
+let cursorHidden = false;
 
 function hideCursor() {
+  cursorHidden = true;
   process.stdout.write("\x1b[?25l");
 }
 
 function showCursor() {
+  if (!cursorHidden) return;
+
+  cursorHidden = false;
   process.stdout.write("\x1b[?25h");
 }
 

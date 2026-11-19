@@ -12,7 +12,7 @@ export async function validateDays(input: string): Promise<Result<number[]>> {
     weekends: [0, 6],
   };
 
-  if (groups[value]) return { success: true, value: [...groups[value]!] };
+  if (Object.hasOwn(groups, value)) return { success: true, value: [...groups[value]!] };
 
   const days = [...value].map(day => "umtwhfs".indexOf(day));
   if (days.includes(-1)) {
@@ -68,47 +68,37 @@ export async function validatePositiveInteger(
   };
 }
 
+// Match the whole-second range of FreeBlock's .NET TimeSpan.
+const MAX_DURATION_SECONDS = 922_337_203_685;
+
 export async function validateTimeSpanMs(
   input: string,
+  minutesFirst = false,
 ): Promise<Result<number>> {
-  const parts = input.split(":");
-  let partNumbers = [];
+  const text = input.trim();
+  const match = /^(-)?(?:(\d+)\.)?(\d+):(\d{2})(?::(\d{2}))?$/.exec(text);
+  const format = minutesFirst ? "[HH:]MM:SS" : "DD.HH:MM:SS";
+  const invalid = { success: false as const, error: `Value must be a valid timespan (${format})` };
 
-  if (parts.length < 2 || parts.length > 3) {
-    return {
-      success: false,
-      error: "Value must be a valid timespan ([HH:]MM:SS)",
-    };
+  if (!match) return invalid;
+
+  const [, negative, dayPart, firstPart, secondPart, thirdPart] = match;
+  if (dayPart !== undefined && minutesFirst) return invalid;
+
+  const days = Number(dayPart ?? 0);
+  const first = Number(firstPart);
+  const second = Number(secondPart);
+  const third = Number(thirdPart ?? 0);
+  const shortForm = minutesFirst && thirdPart === undefined;
+
+  if (second > 59 || third > 59 || (dayPart !== undefined && first > 23)) return invalid;
+
+  const totalSeconds = shortForm ? first * 60 + second : ((days * 24 + first) * 60 + second) * 60 + third;
+  if (totalSeconds > MAX_DURATION_SECONDS) return invalid;
+
+  if (negative && totalSeconds !== 0) {
+    return { success: false, error: "Value must be a positive timespan" };
   }
 
-  for (const part of parts) {
-    const number = parseInt(part);
-    if (part.length > 2 || Number.isNaN(number)) {
-      return {
-        success: false,
-        error: "Value must be a valid timespan ([HH:]MM:SS)",
-      };
-    }
-    partNumbers.push(number);
-  }
-
-  // Parts to millis
-  if (partNumbers.length == 3) {
-    const hours = partNumbers[0]!;
-    const minutes = partNumbers[1]!;
-    const seconds = partNumbers[2]!;
-
-    return {
-      success: true,
-      value: ((hours * 60 + minutes) * 60 + seconds) * 1000,
-    };
-  }
-
-  const minutes = partNumbers[0]!;
-  const seconds = partNumbers[1]!;
-
-  return {
-    success: true,
-    value: (minutes * 60 + seconds) * 1000,
-  };
+  return { success: true, value: totalSeconds * 1000 };
 }

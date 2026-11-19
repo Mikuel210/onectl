@@ -1,98 +1,63 @@
+import { isFlag, parseArguments, requestsHelp } from "./argument-parser";
 import type { Argument, Command, Flag } from "./command";
 import { createHelp } from "./help";
+import type { Result } from "./task";
 
 export function createCommandFramework(programName: string) {
-  const isFlag = (arg: string) => arg.startsWith("-");
-  const isRoot = (command: Command) => command.route.length == 0;
-  const getRoot = () => commands.filter((e) => isRoot(e))[0]!;
+  const commands: Command[] = [];
+  const isRoot = (command: Command) => command.route.length === 0;
+  const { showHelp, showUsage } = createHelp(programName, commands, isRoot);
+  const defaultRoot: Command = { route: [], description: programName, args: [], flags: [], run: root };
+  const getRoot = () => commands.find(isRoot) ?? defaultRoot;
 
-  let commands: Command[] = [];
-  const showHelp = createHelp(programName, commands, isRoot);
-
-  async function handle(args: string[]): Promise<number> {
-    // Resolve command
-    let command = resolveCommand(args);
-
-    if (command == null) {
-      console.log(`Command not found: ${programName} ${args.join(" ")}`);
-      console.log(`See: ${programName} --help`);
-      return 1;
+  async function handle(tokens: string[]): Promise<number> {
+    const command = resolveCommand(tokens);
+    if (!command) {
+      console.error(`Command not found: ${[programName, ...tokens].join(" ")}`);
+      return fail(`see: ${programName} --help`);
     }
 
-    // Trigger help
-    const positionalArgs = args.slice(command.route.length);
-
-    if (positionalArgs.some((e) => ["-h", "-?", "--help"].includes(e))) {
+    const input = tokens.slice(command.route.length);
+    if (requestsHelp(input)) {
       showHelp(command);
       return 0;
     }
 
-    // Validate arguments
-    const validatedArgs: Argument[] = [];
+    const parsed = parseArguments(input, command.flags);
+    if (!parsed.success) return fail(parsed.error);
 
-    for (let i = 0; i < command.args.length; i++) {
-      const argument = command.args[i]!;
-      const input = positionalArgs[i];
-
-      if (!input) {
-        console.error(`<${argument.name}> is required`);
-        return 1;
-      }
-
-      const result = await argument.validate(input);
-      if (!result.success) {
-        console.error(`<${argument.name}>: ${result.error!}`);
-        return 1;
-      }
-
-      validatedArgs.push({ ...argument, value: result.value! });
+    const { positionals, flags } = parsed.value;
+    const isGroup = command.executable === false && !isRoot(command);
+    const args = isGroup ? [] : command.args;
+    if (args.at(-1)?.params && positionals.length > args.length) {
+      positionals.push(positionals.splice(args.length - 1).join(" "));
     }
 
-    // Validate flags
-    let flagArgs = positionalArgs.slice(command.args.length);
-    const firstFlagIndex = flagArgs.findIndex((e) => isFlag(e));
+    const extra = positionals[args.length];
+    if (extra !== undefined) return fail(`Unexpected argument: ${extra}`);
+
+    if (isGroup || !command.run) {
+      showUsage(command);
+      return 0;
+    }
+
+    // Validate flags before asking for positionals so a bad flag cannot trigger an input prompt.
     const validatedFlags: Flag[] = [];
-
-    if (firstFlagIndex == -1) return await command.run(validatedArgs, []);
-
-    flagArgs = flagArgs.slice(firstFlagIndex);
-
-    argLoop: for (let i = 0; i < flagArgs.length; i++) {
-      const flagArg = flagArgs[i]!;
-
-      for (const flag of command.flags) {
-        if (flagArg != `--${flag.longName}` && flagArg != `-${flag.shortName}`)
-          continue;
-
-        if (flag.switch) {
-          validatedFlags.push(flag);
-          continue argLoop;
-        }
-
-        // Validate value
-        i++;
-        const input = flagArgs[i];
-
-        if (!input) {
-          console.error(`[--${flag.longName}] can't be empty`);
-          return 1;
-        }
-
-        const result = await flag.validate(input);
-        if (!result.success) {
-          console.error(`[--${flag.longName}]: ${result.error!}`);
-          return 1;
-        }
-
-        validatedFlags.push({ ...flag, value: result.value });
-        continue argLoop;
+    for (const { flag, input } of flags) {
+      if (input === undefined) {
+        validatedFlags.push({ ...flag });
+        continue;
       }
 
-      console.error(`Unknown option: ${flagArg}`);
-      return 1;
+      const result = await flag.validate(input);
+      if (!result.success) return fail(formatValidationError(`[--${flag.longName}]`, result.error));
+
+      validatedFlags.push({ ...flag, value: result.value });
     }
 
-    // Run command
+    const validatedArgs = await validatePositionals([programName, ...command.route], args, positionals);
+    if (!validatedArgs) return 1;
+
     return await command.run(validatedArgs, validatedFlags);
   }
 
@@ -100,58 +65,81 @@ export function createCommandFramework(programName: string) {
     commands.push(command);
   }
 
-  function resolveCommand(args: string[]): Command | null {
-    let matches: Command[] = [];
-
-    if (args.length == 0) return getRoot();
-
+  function resolveCommand(tokens: string[]): Command | undefined {
+    let match: Command | undefined;
     for (const command of commands) {
-      if (matchCommand(args, command)) matches.push(command);
+      if (isRoot(command) || command.route.length <= (match?.route.length ?? 0)) continue;
+      if (command.route.every((part, index) => part === tokens[index])) match = command;
     }
 
-    if (matches.length == 0) {
-      if (isFlag(args[0]!)) return getRoot();
-      return null;
-    }
-
-    // Return match with the longest route
-    let max: number = 0;
-    let maxMatch: Command | null = null;
-
-    for (const command of matches) {
-      if (command.route.length <= max) continue;
-      max = command.route.length;
-      maxMatch = command;
-    }
-
-    return maxMatch;
+    if (match) return match;
+    if (tokens.length === 0 || isFlag(tokens[0]!)) return getRoot();
   }
 
-  function matchCommand(args: string[], command: Command): boolean {
-    if (args.length < command.route.length) return false;
-    if (isRoot(command) && args.length != 0) return false;
-
-    for (let i = 0; i < command.route.length; i++) {
-      if (command.route[i] != args[i]) return false;
-    }
-
-    return true;
-  }
-
-  async function root(args: Argument[], flags: Flag[]): Promise<number> {
-    console.log(`usage: ${programName} <command> [<args>]`);
-    console.log(`see: ${programName} --help`);
+  async function root(_args: Argument[], _flags: Flag[]): Promise<number> {
+    showUsage(getRoot());
     return 0;
   }
 
-  return {
-    handle,
-    registerCommand,
-    showHelp,
-    commands,
-    isFlag,
-    isRoot,
-    getRoot,
-    root,
-  };
+  return { handle, registerCommand, showHelp, commands, isFlag, isRoot, getRoot, root };
+}
+
+async function validatePositionals(
+  route: string[],
+  args: Argument[],
+  positionals: string[],
+): Promise<Argument[] | null> {
+  const validated: Argument[] = [];
+  const prefix = [...route];
+  let prompted = false;
+
+  for (const [index, argument] of args.entries()) {
+    const label = `<${argument.name}>`;
+    let input: string | undefined = positionals[index];
+
+    while (true) {
+      if (input !== undefined) {
+        const result = await validatePositional(argument, label, input);
+        if (result.success) {
+          validated.push({ ...argument, value: result.value });
+          prefix.push(input);
+          break;
+        }
+
+        console.error(result.error);
+      } else if (!process.stdin.isTTY) {
+        console.error(`${label} is required`);
+      }
+
+      if (!process.stdin.isTTY) return null;
+
+      const response = prompt(`${prefix.join(" ")} ${label}: `);
+      if (response == null) return null;
+
+      prompted = true;
+      input = response.trim();
+    }
+  }
+
+  if (prompted) console.log();
+
+  return validated;
+}
+
+async function validatePositional(argument: Argument, label: string, input: string): Promise<Result<unknown>> {
+  if (!input.trim()) return { success: false, error: `${label} can't be empty` };
+
+  const result = await argument.validate(input);
+  if (result.success) return result;
+
+  return { success: false, error: formatValidationError(label, result.error) };
+}
+
+function formatValidationError(label: string, detail: string): string {
+  return detail ? `${label}: ${detail}` : label;
+}
+
+function fail(message: string): 1 {
+  console.error(message);
+  return 1;
 }

@@ -113,7 +113,7 @@ async function validatePositionals(
 
       if (!process.stdin.isTTY) return null;
 
-      const response = prompt(`${prefix.join(" ")} ${label}: `);
+      const response = prompt(`${prefix.join(" ")} ${label}:`);
       if (response == null) return null;
 
       prompted = true;

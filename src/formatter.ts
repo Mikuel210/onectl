@@ -99,7 +99,7 @@ export async function promptOptions<T extends { name: string }>(
     const entry = entries[0]!;
     console.log(stringify(entry));
 
-    let input = prompt(`Select this ${itemName}? (Y/n): `) ?? "";
+    let input = prompt(`Select this ${itemName}? (Y/n):`) ?? "";
     input = input.trim().toLowerCase();
 
     if (["y", "yes"].includes(input) || input == "") {

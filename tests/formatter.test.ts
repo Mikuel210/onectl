@@ -43,6 +43,20 @@ test("promptOptions validates the numeric selection like bgmd", async () => {
   }
 });
 
+test("promptOptions passes a confirmation prompt without a trailing space", async () => {
+  const entry = { name: "Alpha" };
+  const log = spyOn(console, "log").mockImplementation(() => {});
+  const ask = spyOn(globalThis, "prompt").mockReturnValue("y");
+
+  try {
+    await promptOptions([entry], "Alph", (item) => item.name, "an", "item");
+    expect(ask.mock.calls).toEqual([["Select this item? (Y/n):"]]);
+  } finally {
+    ask.mockRestore();
+    log.mockRestore();
+  }
+});
+
 test("promptOptions returns no-match failure", async () => {
   expect(await promptOptions<{ name: string }>([], "x", (e) => e.name, "an", "item")).toEqual({
     success: false,

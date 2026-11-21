@@ -41,7 +41,7 @@ test("retries only the invalid positional and preserves subsequent supplied valu
   try {
     expect(await cli.handle(["item", "add", " A name ", "no", " label "])).toBe(7);
     expect(seen).toEqual([[" A name ", 3, " label "]]);
-    expect(ask.mock.calls.map(([message]) => message)).toEqual(Array(3).fill("tool item add  A name  <count>: "));
+    expect(ask.mock.calls.map(([message]) => message)).toEqual(Array(3).fill("tool item add  A name  <count>:"));
     expect(error.mock.calls.map(([message]) => message)).toEqual([
       "<count>: Value must be a number",
       "<count> can't be empty",
@@ -62,8 +62,8 @@ test("prompts for missing positionals in order and fails without running on EOF"
     expect(await cli.handle(["item", "add", "Focus"])).toBe(1);
     expect(seen).toEqual([]);
     expect(ask.mock.calls.map(([message]) => message)).toEqual([
-      "tool item add Focus <count>: ",
-      "tool item add Focus 01 <label>: ",
+      "tool item add Focus <count>:",
+      "tool item add Focus 01 <label>:",
     ]);
   } finally {
     ask.mockRestore();

@@ -9,6 +9,7 @@ export function createHelp(programName: string, commands: Command[], isRoot: (co
   const getRoute = (command: Command) => [programName, ...command.route].join(" ");
 
   function showHelp(command: Command): void {
+    const rootHelp = isRoot(command);
     console.log(`usage: ${getUsage(command, true)}`);
     console.log(`description: ${command.description}`);
 
@@ -17,18 +18,18 @@ export function createHelp(programName: string, commands: Command[], isRoot: (co
       logRows(command.args.map(({ name, description }) => [name, description]), true);
     }
 
-    if (!isRoot(command) && command.flags.length > 0) {
+    if (!rootHelp && command.flags.length > 0) {
       console.log("\nFlags:");
       logRows(command.flags.map((flag) => [getFlagNames(flag, ", "), flag.description]), true);
     }
 
     const subcommands = commands.filter((child) =>
-      !child.hidden && child.executable !== false && child.route.length > command.route.length
+      (!rootHelp || !child.hidden) && child.executable !== false && child.route.length > command.route.length
       && command.route.every((part, index) => part === child.route[index])
     );
     if (subcommands.length === 0) return;
 
-    if (!isRoot(command)) {
+    if (!rootHelp) {
       console.log("\nSubcommands:");
       logRows(subcommands.map((child) => [getRoute(child), child.description]), true);
       return;

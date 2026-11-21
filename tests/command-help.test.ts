@@ -67,6 +67,7 @@ test("nonexecutable groups show short usage and list flat executable descendants
     args: [],
     flags: [],
     category: "Items",
+    hidden: true,
     run,
   });
   cli.registerCommand({ route: ["item", "internal"], description: "Internal", args: [], flags: [], hidden: true, run });
@@ -86,6 +87,7 @@ test("nonexecutable groups show short usage and list flat executable descendants
       "description: Items",
       "\nSubcommands:",
       "  tool item nested add   Add an item",
+      "  tool item internal     Internal",
     ]);
     log.mockClear();
     expect(await cli.handle(["item", "extra"])).toBe(1);
